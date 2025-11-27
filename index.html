@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✨ 萌萌表情工坊 | AI Emoji Workflow</title>
+
+    <!-- 核心库 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+
+    <!-- 字体 -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Noto+Sans+SC:wght@400;700&display=swap"
+        rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans SC"', 'sans-serif'],
+                        cute: ['"Fredoka"', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            pink: '#FFB7B2',
+                            blue: '#A2E1DB',
+                            yellow: '#FFDAC1',
+                            purple: '#E2F0CB',
+                            dark: '#4A4A4A'
+                        }
+                    },
+                    animation: {
+                        'bounce-slow': 'bounce 3s infinite',
+                        'wiggle': 'wiggle 1s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        wiggle: {
+                            '0%, 100%': { transform: 'rotate(-3deg)' },
+                            '50%': { transform: 'rotate(3deg)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #FFF5F5;
+            background-image: radial-gradient(#FFE4E1 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border: 4px solid #FFF;
+            box-shadow: 0 10px 25px -5px rgba(255, 183, 178, 0.3);
+        }
+
+        .btn-cute {
+            transition: all 0.2s;
+            box-shadow: 0 4px 0 rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-cute:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+        }
+
+        .tab-active {
+            background-color: #fff;
+            color: #FFB7B2;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .bg-checkerboard {
+            background-image: linear-gradient(45deg, #f0f0f0 25%, transparent 25%), linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f0f0f0 75%), linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+
+        [x-cloak] {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body class="text-brand-dark min-h-screen pb-20" x-data="app()" x-init="initApp()">
+
+    <!-- 顶部通知 (Toast) -->
+    <div class="fixed top-6 left-1/2 -translate-x-1/2 z-[60] transition-all duration-300 pointer-events-none"
+        x-show="toast.show" x-transition:enter="transform ease-out duration-300 transition-translate-y"
+        x-transition:enter-start="translate-y-[-100%] opacity-0" x-transition:enter-end="translate-y-0 opacity-100"
+        x-transition:leave="transform ease-in duration-200" x-transition:leave-start="translate-y-0 opacity-100"
+        x-transition:leave-end="translate-y-[-100%] opacity-0" x-cloak>
+        <div
+            class="bg-brand-dark text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 font-bold border-2 border-white">
+            <i data-lucide="sparkles" class="w-5 h-5 text-brand-yellow"></i>
+            <span x-text="toast.message"></span>
+        </div>
+    </div>
+
+    <!-- 顶部导航 -->
+    <nav class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b-4 border-brand-pink mb-8 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-3 select-none cursor-pointer" @click="mode='prompt'">
+                <div
+                    class="w-12 h-12 bg-gradient-to-br from-brand-pink to-brand-yellow rounded-2xl flex items-center justify-center text-white shadow-lg transform -rotate-3 hover:rotate-0 transition-transform duration-300">
+                    <i data-lucide="smile-plus" class="w-7 h-7"></i>
+                </div>
+                <div>
+                    <h1 class="font-cute text-2xl font-bold text-gray-800 tracking-wide">萌萌表情工坊</h1>
+                    <p class="text-xs text-gray-400 font-sans font-medium">Nano Banana Pro 专用工具</p>
+                </div>
+            </div>
+
+            <!-- 导航 Tab -->
+            <div class="flex bg-gray-100 p-1.5 rounded-full gap-1 overflow-x-auto">
+                <button @click="mode = 'prompt'"
+                    :class="mode === 'prompt' ? 'tab-active' : 'text-gray-400 hover:text-gray-600'"
+                    class="px-4 md:px-5 py-2 rounded-full font-bold transition-all text-sm flex items-center gap-2 whitespace-nowrap">
+                    <i data-lucide="wand-2" class="w-4 h-4"></i> <span class="hidden md:inline">1.</span> 获取咒语
+                </button>
+                <button @click="mode = 'cutter'"
+                    :class="mode === 'cutter' ? 'tab-active' : 'text-gray-400 hover:text-gray-600'"
+                    class="px-4 md:px-5 py-2 rounded-full font-bold transition-all text-sm flex items-center gap-2 whitespace-nowrap">
+                    <i data-lucide="scissors" class="w-4 h-4"></i> <span class="hidden md:inline">2.</span> 智能切图
+                </button>
+                <button @click="mode = 'animator'"
+                    :class="mode === 'animator' ? 'tab-active' : 'text-gray-400 hover:text-gray-600'"
+                    class="px-4 md:px-5 py-2 rounded-full font-bold transition-all text-sm flex items-center gap-2 whitespace-nowrap">
+                    <i data-lucide="film" class="w-4 h-4"></i> <span class="hidden md:inline">3.</span> 制作动图
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto px-4">
+
+        <!-- ==================== 模式 1: 咒语生成 (Prompt Station) ==================== -->
+        <div x-show="mode === 'prompt'" x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0 transform -translate-x-4"
+            x-transition:enter-end="opacity-100 transform translate-x-0">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-cute font-bold text-brand-dark mb-2">第一步：选择你的目标</h2>
+                <p class="text-gray-500">这里的咒语专为 <b>Nano Banana Pro</b> 优化，请根据需求选择</p>
+            </div>
+
+            <!-- 咒语类型切换 -->
+            <div class="flex justify-center mb-8">
+                <div class="bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100 inline-flex">
+                    <button @click="promptType = 'grid'"
+                        :class="promptType === 'grid' ? 'bg-brand-blue text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'"
+                        class="px-6 py-2 rounded-xl font-bold transition-all text-sm flex items-center gap-2">
+                        <i data-lucide="layout-grid" class="w-4 h-4"></i> 制作静态组图 (切图用)
+                    </button>
+                    <button @click="promptType = 'single'"
+                        :class="promptType === 'single' ? 'bg-brand-pink text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'"
+                        class="px-6 py-2 rounded-xl font-bold transition-all text-sm flex items-center gap-2">
+                        <i data-lucide="user" class="w-4 h-4"></i> 制作动图素材 (单张用)
+                    </button>
+                </div>
+            </div>
+
+            <div class="max-w-4xl mx-auto">
+                <!-- 静态组图 Prompt -->
+                <div x-show="promptType === 'grid'"
+                    class="glass-panel rounded-3xl p-8 relative group border-brand-blue/30 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div class="absolute top-6 right-6">
+                        <button @click="copyText(prompts.grid)"
+                            class="p-3 bg-brand-blue text-white rounded-full shadow-lg hover:bg-blue-300 transition-all transform hover:scale-110"
+                            title="一键复制">
+                            <i data-lucide="copy" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-3 mb-4 text-brand-blue">
+                        <div class="p-2 bg-blue-50 rounded-lg">
+                            <i data-lucide="layout-grid" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg text-gray-800">4x6 表情包组图咒语</h3>
+                            <p class="text-xs text-gray-400">生成一张包含24个表情的大图，适合切割使用</p>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-blue-50/50 rounded-2xl p-6 text-sm text-gray-700 font-mono leading-relaxed border-2 border-blue-100/50 select-all">
+                        <p x-text="prompts.grid"></p>
+                    </div>
+                    <div class="mt-4 text-xs text-gray-400 flex items-center gap-1">
+                        <i data-lucide="info" class="w-3 h-3"></i>
+                        <span>生成后请前往「智能切图」模式上传图片。</span>
+                    </div>
+                </div>
+
+                <!-- 动图素材 Prompt -->
+                <div x-show="promptType === 'single'"
+                    class="glass-panel rounded-3xl p-8 relative group border-brand-pink/30 animate-in fade-in slide-in-from-bottom-4 duration-500"
+                    x-cloak>
+                    <div class="absolute top-6 right-6">
+                        <button @click="copyText(prompts.single)"
+                            class="p-3 bg-brand-pink text-white rounded-full shadow-lg hover:bg-pink-300 transition-all transform hover:scale-110"
+                            title="一键复制">
+                            <i data-lucide="copy" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-3 mb-4 text-brand-pink">
+                        <div class="p-2 bg-pink-50 rounded-lg">
+                            <i data-lucide="sparkles" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg text-gray-800">单张动图素材咒语</h3>
+                            <p class="text-xs text-gray-400">生成单张高质量、背景干净的角色图，适合制作特效动图</p>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-pink-50/50 rounded-2xl p-6 text-sm text-gray-700 font-mono leading-relaxed border-2 border-pink-100/50 select-all">
+                        <p x-text="prompts.single"></p>
+                    </div>
+                    <div class="mt-4 text-xs text-gray-400 flex items-center gap-1">
+                        <i data-lucide="info" class="w-3 h-3"></i>
+                        <span>生成后请前往「制作动图」模式上传图片。</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-12 text-center">
+                <button @click="mode = promptType === 'grid' ? 'cutter' : 'animator'"
+                    class="btn-cute px-10 py-4 bg-brand-dark text-white rounded-full font-bold shadow-xl shadow-gray-200 inline-flex items-center gap-2 hover:bg-gray-800 transform hover:scale-105 transition-all">
+                    <span>去下一步</span> <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================== 模式 2: 表情切图 (Cutter) ==================== -->
+        <div x-show="mode === 'cutter'" x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0 transform translate-x-4"
+            x-transition:enter-end="opacity-100 transform translate-x-0" x-cloak>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- 左侧：上传与操作 -->
+                <div class="lg:col-span-1 space-y-6">
+                    <div class="glass-panel rounded-3xl p-6">
+                        <div class="text-center mb-6">
+                            <h2 class="font-cute text-xl font-bold mb-2 text-gray-700">第二步：上传切图</h2>
+                            <p class="text-sm text-gray-500">上传 4x6 布局的大图，自动切分为24个表情</p>
+                        </div>
+
+                        <label class="block w-full cursor-pointer group">
+                            <div
+                                class="border-4 border-dashed border-brand-blue rounded-2xl h-48 flex flex-col items-center justify-center text-gray-400 bg-white group-hover:bg-blue-50 group-hover:border-blue-400 transition-all relative overflow-hidden">
+                                <template x-if="!cutter.uploadedImage">
+                                    <div class="text-center">
+                                        <i data-lucide="upload-cloud"
+                                            class="w-12 h-12 mb-2 mx-auto text-brand-blue group-hover:scale-110 transition-transform"></i>
+                                        <span class="font-bold text-sm">点击上传 AI 生成图</span>
+                                    </div>
+                                </template>
+                                <template x-if="cutter.uploadedImage">
+                                    <img :src="cutter.uploadedImage" class="w-full h-full object-cover opacity-50">
+                                </template>
+                                <div x-show="cutter.uploadedImage"
+                                    class="absolute inset-0 flex items-center justify-center bg-black/30 text-white font-bold">
+                                    <span>点击更换图片</span>
+                                </div>
+                            </div>
+                            <input type="file" accept="image/*" class="hidden" @change="handleCutterUpload">
+                        </label>
+
+                        <!-- 自动处理状态 -->
+                        <div x-show="cutter.isProcessing" class="mt-6 text-center py-4">
+                            <div
+                                class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-brand-pink border-t-transparent">
+                            </div>
+                            <p class="text-sm text-brand-pink font-bold mt-2">正在智能切割中...</p>
+                        </div>
+
+                        <!-- 结果操作 -->
+                        <div x-show="cutter.slices.length > 0 && !cutter.isProcessing"
+                            class="mt-6 space-y-3 animate-wiggle-enter">
+                            <div
+                                class="bg-green-50 text-green-700 px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-2 border border-green-100">
+                                <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+                                成功切割出 <span x-text="cutter.slices.length"></span> 个表情！
+                            </div>
+                            <button @click="downloadAllSlices"
+                                class="btn-cute w-full py-3 rounded-xl bg-brand-blue text-white font-bold shadow-lg shadow-blue-200 flex items-center justify-center gap-2 hover:bg-blue-300">
+                                <i data-lucide="package" class="w-5 h-5"></i>
+                                打包下载 (ZIP)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div
+                        class="bg-white rounded-2xl p-5 border-2 border-brand-yellow shadow-sm relative overflow-hidden">
+                        <div class="absolute -right-4 -top-4 w-16 h-16 bg-brand-yellow rounded-full opacity-20"></div>
+                        <h3 class="font-bold text-gray-700 mb-2 flex items-center gap-2">
+                            <i data-lucide="lightbulb" class="w-4 h-4 text-orange-400"></i> 小贴士
+                        </h3>
+                        <p class="text-xs text-gray-500 leading-relaxed">
+                            点击右侧任意一个小表情上的 <i data-lucide="film"
+                                class="w-3 h-3 inline align-middle bg-gray-100 rounded p-0.5"></i>
+                            图标，可以直接把它发送到动图制作器哦！无需下载再上传。
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 右侧：预览网格 -->
+                <div class="lg:col-span-2">
+                    <div
+                        class="glass-panel rounded-3xl p-6 md:p-8 shadow-xl h-full min-h-[500px] flex flex-col relative">
+                        <h2 class="font-cute text-xl font-bold mb-6 text-gray-700 flex items-center gap-2">
+                            <i data-lucide="layout-grid" class="w-6 h-6 text-brand-purple"></i>
+                            表情预览墙
+                        </h2>
+
+                        <div x-show="cutter.slices.length === 0"
+                            class="flex-1 flex flex-col items-center justify-center text-gray-300 border-4 border-dashed border-gray-100 rounded-2xl bg-white/50">
+                            <i data-lucide="ghost" class="w-24 h-24 mb-4 opacity-20"></i>
+                            <p class="font-bold text-lg">等待投喂图片...</p>
+                        </div>
+
+                        <div x-show="cutter.slices.length > 0"
+                            class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4 overflow-y-auto max-h-[600px] p-2 pr-4 custom-scrollbar">
+                            <template x-for="(slice, index) in cutter.slices" :key="index">
+                                <div
+                                    class="group relative bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all hover:-translate-y-1 aspect-square flex items-center justify-center overflow-hidden bg-checkerboard">
+                                    <img :src="slice" class="w-full h-full object-contain p-1">
+
+                                    <!-- 悬浮操作 -->
+                                    <div
+                                        class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-sm">
+                                        <button @click="downloadSingleSlice(slice, index)"
+                                            class="p-2 bg-white rounded-full text-brand-dark hover:text-brand-blue transition-colors transform hover:scale-110 shadow-lg"
+                                            title="下载此图">
+                                            <i data-lucide="download" class="w-4 h-4"></i>
+                                        </button>
+                                        <button @click="sendToAnimator(slice)"
+                                            class="p-2 bg-white rounded-full text-brand-dark hover:text-brand-pink transition-colors transform hover:scale-110 shadow-lg"
+                                            title="去制作动图">
+                                            <i data-lucide="film" class="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                    <span
+                                        class="absolute top-1 left-1 bg-black/50 text-white text-[10px] px-1.5 rounded-md font-mono"
+                                        x-text="index + 1"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 模式 3: 动图制作 (Animator) ==================== -->
+        <div x-show="mode === 'animator'" x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0 transform translate-x-4"
+            x-transition:enter-end="opacity-100 transform translate-x-0" x-cloak>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+                <!-- 左侧：配置 -->
+                <div class="glass-panel rounded-3xl p-6 shadow-xl">
+                    <div class="mb-6 flex justify-between items-center">
+                        <h2 class="font-cute text-xl font-bold text-gray-700">第三步：让它动起来</h2>
+                        <button @click="animator.imageSrc = null; animator.resultGif = null" x-show="animator.imageSrc"
+                            class="text-xs text-red-400 hover:text-red-600 underline flex items-center gap-1">
+                            <i data-lucide="trash-2" class="w-3 h-3"></i> 清除重置
+                        </button>
+                    </div>
+
+                    <!-- 1. 选择图片 -->
+                    <div class="mb-6">
+                        <label class="block w-full cursor-pointer group relative">
+                            <div class="bg-white border-4 border-dashed border-brand-purple rounded-2xl h-48 flex flex-col items-center justify-center text-gray-400 transition-all overflow-hidden"
+                                :class="{'border-solid border-brand-pink': animator.imageSrc}">
+
+                                <template x-if="!animator.imageSrc">
+                                    <div class="text-center group-hover:scale-105 transition-transform">
+                                        <div
+                                            class="w-12 h-12 bg-brand-purple/30 rounded-full flex items-center justify-center mx-auto mb-2 text-brand-dark">
+                                            <i data-lucide="image-plus" class="w-6 h-6"></i>
+                                        </div>
+                                        <span class="font-bold text-sm text-gray-500">上传单个表情图</span>
+                                        <p class="text-xs text-gray-300 mt-1">(JPG / PNG / GIF)</p>
+                                    </div>
+                                </template>
+
+                                <template x-if="animator.imageSrc">
+                                    <div class="relative w-full h-full bg-checkerboard">
+                                        <img :src="animator.imageSrc" class="w-full h-full object-contain p-4">
+                                        <div
+                                            class="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/10 transition-colors">
+                                            <span
+                                                class="opacity-0 hover:opacity-100 bg-black/60 text-white text-xs px-3 py-1 rounded-full">点击更换</span>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            <input type="file" accept="image/*" class="hidden" @change="handleAnimatorUpload">
+                        </label>
+                    </div>
+
+                    <!-- 2. 参数控制 (有图时显示) -->
+                    <div x-show="animator.imageSrc" x-transition class="space-y-6">
+
+                        <!-- 特效选择 -->
+                        <div>
+                            <label class="text-xs font-bold text-gray-400 uppercase mb-2 block tracking-wider">选择动作
+                                (Motion)</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <template x-for="ef in effects" :key="ef.id">
+                                    <button @click="animator.effect = ef.id"
+                                        :class="animator.effect === ef.id ? 'bg-brand-pink text-white ring-2 ring-brand-pink ring-offset-1 shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'"
+                                        class="py-3 px-1 rounded-xl text-xs font-bold transition-all text-center truncate active:scale-95"
+                                        x-text="ef.name">
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- 强度滑块 -->
+                        <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100">
+                            <div class="flex justify-between mb-3">
+                                <label class="text-xs font-bold text-gray-500">动作幅度</label>
+                                <span
+                                    class="text-xs font-mono bg-white px-2 py-0.5 rounded border border-gray-200 text-brand-pink"
+                                    x-text="animator.intensity"></span>
+                            </div>
+                            <input type="range" min="1" max="10" x-model="animator.intensity"
+                                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-pink">
+
+                            <div class="flex justify-between mb-3 mt-5">
+                                <label class="text-xs font-bold text-gray-500">速度 (Speed)</label>
+                                <span
+                                    class="text-xs font-mono bg-white px-2 py-0.5 rounded border border-gray-200 text-brand-blue"
+                                    x-text="animator.speed"></span>
+                            </div>
+                            <input type="range" min="0.5" max="3" step="0.1" x-model="animator.speed"
+                                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-blue">
+                        </div>
+
+                        <!-- 生成按钮 -->
+                        <button @click="generateGif" :disabled="animator.isGenerating"
+                            class="btn-cute w-full py-4 rounded-2xl bg-gradient-to-r from-brand-pink to-brand-yellow text-brand-dark font-black text-lg shadow-xl shadow-orange-100 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait hover:scale-[1.02] active:scale-100 transform transition-all">
+                            <i x-show="!animator.isGenerating" data-lucide="sparkles" class="w-5 h-5"></i>
+                            <i x-show="animator.isGenerating" data-lucide="loader" class="w-5 h-5 animate-spin"></i>
+                            <span x-text="animator.isGenerating ? '魔法生成中...' : '生成动图 GIF'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 右侧：预览结果 -->
+                <div
+                    class="glass-panel rounded-3xl p-8 shadow-xl flex flex-col items-center justify-center relative min-h-[400px] bg-white">
+
+                    <div
+                        class="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiM5QzlDOUMiLz48L3N2Zz4=')]">
+                    </div>
+
+                    <template x-if="!animator.resultGif && !animator.isGenerating">
+                        <div class="text-center text-gray-300">
+                            <div
+                                class="w-32 h-32 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce-slow border-4 border-dashed border-gray-100">
+                                <i data-lucide="clapperboard" class="w-12 h-12"></i>
+                            </div>
+                            <p class="font-bold text-gray-400">动图预览区</p>
+                        </div>
+                    </template>
+
+                    <template x-if="animator.isGenerating">
+                        <div class="text-center z-10">
+                            <div
+                                class="w-16 h-16 border-4 border-brand-blue border-t-transparent rounded-full animate-spin mx-auto mb-4">
+                            </div>
+                            <p class="text-brand-blue font-bold animate-pulse">正在逐帧渲染...</p>
+                            <p class="text-xs text-gray-400 mt-2">可能需要几秒钟</p>
+                        </div>
+                    </template>
+
+                    <template x-if="animator.resultGif">
+                        <div class="text-center w-full animate-wiggle-enter z-10">
+                            <div class="relative inline-block group">
+                                <img :src="animator.resultGif"
+                                    class="w-64 h-64 object-contain drop-shadow-2xl rounded-xl bg-white/50 backdrop-blur-sm border-4 border-white">
+                                <div
+                                    class="absolute -top-3 -right-3 bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg transform rotate-12 flex items-center gap-1 border-2 border-white">
+                                    <i data-lucide="check" class="w-3 h-3"></i> DONE
+                                </div>
+                            </div>
+
+                            <div class="mt-8 flex gap-4 justify-center">
+                                <a :href="animator.resultGif" download="cute_emoji.gif"
+                                    class="btn-cute py-3 px-8 bg-brand-dark text-white rounded-xl font-bold shadow-lg hover:bg-black flex items-center gap-2">
+                                    <i data-lucide="download" class="w-5 h-5"></i> 下载 GIF
+                                </a>
+                                <button @click="animator.resultGif = null"
+                                    class="py-3 px-4 bg-white border-2 border-gray-100 text-gray-500 rounded-xl font-bold hover:bg-gray-50 transition-colors">
+                                    重做
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="text-center mt-12 text-gray-400 text-xs font-sans">
+        <p>© 2025 MeMaker Cute Workshop. All operations are local & secure.</p>
+    </footer>
+
+    <!-- 逻辑脚本 -->
+    <script>
+        function app() {
+            return {
+                mode: 'prompt', // prompt | cutter | animator
+                promptType: 'grid', // grid | single
+
+                toast: { show: false, message: '' },
+
+                prompts: {
+                    // 静态组图 (Grid)
+                    grid: `Role: Professional Sticker Designer
+Task: Create a set of LINE-style stickers for a Q-version male programmer character.
+Style: Colorful hand-drawn, clean outlines, vibrant soft coloring, white background.
+Layout: A single 4K (3840x2160) image with 24 distinct emojis arranged in a 4x6 grid.
+Character: Blue messy hair, wearing a headset/tech accessory, half-body shot.
+Expressions: 24 variations including happy, tired, typing furiously, eating, shocked, crying, "OK" hand sign, etc.
+Text: Each sticker must have a handwritten Simplified Chinese caption (e.g., "收到", "BUG", "摸鱼", "下班", "救命").
+Constraints: No grid lines, pure white background, high resolution.`,
+
+                    // 动图素材 (Single)
+                    single: `Role: Character Designer
+Task: Create a single high-quality asset for animation.
+Subject: A cute Q-version male programmer character (blue hair, headset).
+Pose: Front-facing, neutral or slightly happy expression, hands by side or simple gesture.
+Style: LINE sticker aesthetic, flat color, clean thick outlines.
+Background: Pure white (#FFFFFF), no shadows, no borders.
+Constraint: The character must be fully contained within the frame, no cropping. High resolution (1024x1024).`
+                },
+
+                // 切图数据
+                cutter: {
+                    uploadedImage: null,
+                    slices: [],
+                    isProcessing: false,
+                    cols: 4,
+                    rows: 6
+                },
+
+                // 动图数据
+                animator: {
+                    imageSrc: null,
+                    resultGif: null,
+                    isGenerating: false,
+                    effect: 'shake',
+                    intensity: 5,
+                    speed: 1,
+                    workerBlobUrl: null
+                },
+
+                // 特效列表
+                effects: [
+                    { id: 'shake', name: '疯狂摇头' },
+                    { id: 'spin', name: '360旋转' },
+                    { id: 'wobble', name: '果冻Q弹' },
+                    { id: 'pulse', name: '急促呼吸' },
+                    { id: 'zoom', name: '鬼畜缩放' },
+                    { id: 'vibrate', name: '高频震动' }
+                ],
+
+                async initApp() {
+                    try {
+                        const resp = await fetch('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js');
+                        const txt = await resp.text();
+                        const blob = new Blob([txt], { type: 'application/javascript' });
+                        this.animator.workerBlobUrl = URL.createObjectURL(blob);
+                    } catch (e) {
+                        console.warn("Worker load failed", e);
+                    }
+                    this.$nextTick(() => lucide.createIcons());
+                },
+
+                showToast(msg) {
+                    this.toast.message = msg;
+                    this.toast.show = true;
+                    setTimeout(() => { this.toast.show = false }, 2000);
+                },
+
+                copyText(text) {
+                    // 兼容性更好的复制方案
+                    const textArea = document.createElement("textarea");
+                    textArea.value = text;
+                    textArea.style.position = "fixed";
+                    textArea.style.left = "-9999px";
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+
+                    try {
+                        const successful = document.execCommand('copy');
+                        if (successful) this.showToast("复制成功！快去生成吧✨");
+                        else this.showToast("复制失败，请手动复制");
+                    } catch (err) {
+                        this.showToast("复制出错");
+                    }
+                    document.body.removeChild(textArea);
+                },
+
+                // --- 切图逻辑 ---
+                handleCutterUpload(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    this.cutter.isProcessing = true;
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        this.cutter.uploadedImage = evt.target.result;
+                        setTimeout(() => this.processSlices(evt.target.result), 500);
+                    };
+                    reader.readAsDataURL(file);
+                },
+
+                processSlices(dataUrl) {
+                    const img = new Image();
+                    img.onload = () => {
+                        const w = img.width / this.cutter.cols;
+                        const h = img.height / this.cutter.rows;
+                        const temp = [];
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = w;
+                        canvas.height = h;
+
+                        for (let r = 0; r < this.cutter.rows; r++) {
+                            for (let c = 0; c < this.cutter.cols; c++) {
+                                ctx.clearRect(0, 0, w, h);
+                                ctx.drawImage(img, c * w, r * h, w, h, 0, 0, w, h);
+                                temp.push(canvas.toDataURL('image/png'));
+                            }
+                        }
+                        this.cutter.slices = temp;
+                        this.cutter.isProcessing = false;
+                        this.$nextTick(() => lucide.createIcons());
+                    };
+                    img.src = dataUrl;
+                },
+
+                downloadSingleSlice(dataUrl, index) {
+                    const link = document.createElement('a');
+                    link.href = dataUrl;
+                    link.download = `emoji_${index + 1}.png`;
+                    link.click();
+                },
+
+                async downloadAllSlices() {
+                    const zip = new JSZip();
+                    const folder = zip.folder("cute_emojis");
+
+                    this.cutter.slices.forEach((data, i) => {
+                        folder.file(`emoji_${i + 1}.png`, data.split(',')[1], { base64: true });
+                    });
+
+                    const content = await zip.generateAsync({ type: "blob" });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(content);
+                    link.download = "emoji_pack.zip";
+                    link.click();
+                },
+
+                // --- 联动逻辑 ---
+                sendToAnimator(imgSrc) {
+                    this.animator.imageSrc = imgSrc;
+                    this.animator.resultGif = null;
+                    this.mode = 'animator';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    this.showToast("已导入到动图工坊 🎬");
+                },
+
+                // --- 动图逻辑 ---
+                handleAnimatorUpload(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        this.animator.imageSrc = evt.target.result;
+                        this.animator.resultGif = null;
+                    };
+                    reader.readAsDataURL(file);
+                },
+
+                async generateGif() {
+                    if (!this.animator.imageSrc || !this.animator.workerBlobUrl) return;
+
+                    this.animator.isGenerating = true;
+                    const size = 300;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = size;
+                    canvas.height = size;
+                    const ctx = canvas.getContext('2d');
+
+                    const gif = new GIF({
+                        workers: 2,
+                        quality: 10,
+                        width: size,
+                        height: size,
+                        workerScript: this.animator.workerBlobUrl,
+                        transparent: 0x00000000
+                    });
+
+                    const img = new Image();
+                    img.src = this.animator.imageSrc;
+                    await new Promise(r => img.onload = r);
+
+                    const frames = 12;
+                    const speed = this.animator.speed;
+                    const intensity = this.animator.intensity;
+
+                    for (let i = 0; i < frames; i++) {
+                        ctx.clearRect(0, 0, size, size);
+                        ctx.save();
+
+                        const cx = size / 2;
+                        const cy = size / 2;
+                        ctx.translate(cx, cy);
+
+                        const p = (i / frames) * Math.PI * 2 * speed;
+
+                        if (this.animator.effect === 'shake') {
+                            ctx.rotate(Math.sin(p) * 0.1 * (intensity / 3));
+                        } else if (this.animator.effect === 'spin') {
+                            ctx.rotate((i / frames) * Math.PI * 2);
+                        } else if (this.animator.effect === 'wobble') {
+                            const sx = 1 + Math.sin(p) * 0.1 * (intensity / 5);
+                            const sy = 1 + Math.cos(p) * 0.1 * (intensity / 5);
+                            ctx.scale(sx, sy);
+                        } else if (this.animator.effect === 'pulse') {
+                            const s = 1 + Math.sin(p) * 0.1 * (intensity / 5);
+                            ctx.scale(s, s);
+                        } else if (this.animator.effect === 'zoom') {
+                            const s = 1 + (i % 2 === 0 ? 0 : 0.2 * (intensity / 5));
+                            ctx.scale(s, s);
+                        } else if (this.animator.effect === 'vibrate') {
+                            const ox = (Math.random() - 0.5) * 10 * (intensity / 5);
+                            const oy = (Math.random() - 0.5) * 10 * (intensity / 5);
+                            ctx.translate(ox, oy);
+                        }
+
+                        const scale = Math.min(size / img.width, size / img.height) * 0.8;
+                        ctx.drawImage(img, -img.width * scale / 2, -img.height * scale / 2, img.width * scale, img.height * scale);
+
+                        ctx.restore();
+                        gif.addFrame(ctx, { copy: true, delay: 100 });
+                    }
+
+                    gif.on('finished', (blob) => {
+                        this.animator.resultGif = URL.createObjectURL(blob);
+                        this.animator.isGenerating = false;
+                        this.$nextTick(() => lucide.createIcons());
+                    });
+
+                    gif.render();
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>
